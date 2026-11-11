@@ -1,0 +1,114 @@
+doctype html
+html
+    head
+        title= title
+        link(rel='stylesheet', href='/stylesheets/style.css')
+        link(rel='stylesheet', href='https://unpkg.com/leaflet@1.5.1/dist/leaflet.css', integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin="")
+        script(src="https://unpkg.com/leaflet@1.5.1/dist/leaflet.js", integrity= "sha512-GffPMF3RvMeYyc1LWMHtK8EbPv0iNZ8/oTtHPx9/cc2ILxQ+u905qIwdpULaqDkyBKgOaB57QTMg7ztg8Jm2Og==", crossorigin="")
+
+    body
+        form#search(autocomplete="off")
+            input#q(type="text", placeholder="Adresse, ville, lieu…", required)
+            button(type="submit") Centrer
+            ul#results
+            span#msg
+        ul.caption
+            li.first Live coverage
+            li.second Country under roll-out
+        block content
+
+        script.
+            const sigfoxMapUrl = "#{sigfoxMapUrl}";
+
+            const map = L.map('mapid', {
+                zoomControl: true,
+                maxZoom: 18,
+                minZoom: 4,
+                worldCopyJump: true
+            }).setView([46.6, 2.5], 6);
+
+            const style_countries = {
+                "color": "#7E0BFF",
+                "weight": 0,
+                zIndex: 90,
+                fillOpacity: 0.15,
+                pane: 'tilePane'
+            };
+
+            const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                className: 'osm-light',
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            });
+            const osmStd = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            });
+            const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                subdomains: 'abc',
+                maxZoom: 18,
+                maxNativeZoom: 17,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+            });
+            osm.addTo(map);
+            const countriesLayer = L.geoJSON(null, style_countries).addTo(map);
+            fetch('/publicmap/countries').then(r => r.json()).then(c => countriesLayer.addData(c)).catch(() => {});
+            L.control.layers({ 'OpenStreetMap (clair)': osm, 'OpenStreetMap': osmStd, 'OpenTopoMap': topo }, { 'Country under roll-out': countriesLayer }, { position: 'topright' }).addTo(map);
+            L.tileLayer(sigfoxMapUrl,{
+                zoomOffset: 0,
+                maxZoom: 18,
+                maxNativeZoom: 11,
+                zIndex: 500,
+                opacity: 0.4,
+                attribution: ' <a href="https://sigfox.com">sigfox</a>'
+            }).addTo(map);
+
+            // Address search (Nominatim / OpenStreetMap)
+            let marker = null;
+            const msg = document.getElementById('msg');
+            function goTo(lat, lon, label) {
+                if (marker) map.removeLayer(marker);
+                marker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
+                map.flyTo([lat, lon], 12);
+            }
+            const form = document.getElementById('search');
+            const input = document.getElementById('q');
+            const list = document.getElementById('results');
+            let timer = null, seq = 0;
+            function pick(r) {
+                list.innerHTML = '';
+                input.value = r.display_name;
+                goTo(parseFloat(r.lat), parseFloat(r.lon), r.display_name);
+            }
+            async function search(showEmptyMsg) {
+                const q = input.value.trim();
+                if (q.length < 3) { list.innerHTML = ''; return; }
+                const my = ++seq;
+                msg.textContent = 'Recherche…';
+                try {
+                    const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=0&q=' + encodeURIComponent(q));
+                    const d = await r.json();
+                    if (my !== seq) return;
+                    list.innerHTML = '';
+                    msg.textContent = d.length || !showEmptyMsg ? '' : 'Adresse introuvable';
+                    d.forEach(res => {
+                        const li = document.createElement('li');
+                        li.textContent = res.display_name;
+                        li.addEventListener('mousedown', ev => { ev.preventDefault(); pick(res); });
+                        list.appendChild(li);
+                    });
+                } catch (err) {
+                    msg.textContent = 'Erreur de recherche';
+                }
+            }
+            input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => search(false), 700); });
+            input.addEventListener('blur', () => setTimeout(() => list.innerHTML = '', 150));
+            form.addEventListener('submit', (e) => { e.preventDefault(); clearTimeout(timer); search(true); });
+            // Optional: /publicmap?lat=..&lon=.. or ?q=address
+            const params = new URLSearchParams(location.search);
+            if (params.get('lat') && params.get('lon')) {
+                goTo(parseFloat(params.get('lat')), parseFloat(params.get('lon')), params.get('lat') + ', ' + params.get('lon'));
+            } else if (params.get('q')) {
+                input.value = params.get('q');
+                search(true);
+            }
