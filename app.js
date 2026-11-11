@@ -22,16 +22,8 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/publicmap', publicMapRouter);
-
-// redirect root urls to the only usable page
-app.get('/', function(req, res) {
-    res.redirect('/publicmap');
-});
-app.get('', function(req, res) {
-    res.redirect('/publicmap');
-});
-
+app.get('/publicmap', (req, res) => res.redirect(301, '/' + req.originalUrl.slice('/publicmap'.length).replace(/^\//, '')));
+app.use('/', publicMapRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

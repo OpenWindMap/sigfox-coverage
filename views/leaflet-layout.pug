@@ -1,21 +1,24 @@
 doctype html
 html
     head
+        meta(name='viewport', content='width=device-width, initial-scale=1')
         title= title
         link(rel='stylesheet', href='/stylesheets/style.css')
         link(rel='stylesheet', href='https://unpkg.com/leaflet@1.5.1/dist/leaflet.css', integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin="")
         script(src="https://unpkg.com/leaflet@1.5.1/dist/leaflet.js", integrity= "sha512-GffPMF3RvMeYyc1LWMHtK8EbPv0iNZ8/oTtHPx9/cc2ILxQ+u905qIwdpULaqDkyBKgOaB57QTMg7ztg8Jm2Og==", crossorigin="")
 
     body
+        block content
+
         form#search(autocomplete="off")
-            input#q(type="text", placeholder="Adresse, ville, lieu…", required)
-            button(type="submit") Centrer
+            .row
+                input#q(type="text", placeholder="Adresse, ville, lieu…", required)
+                button(type="submit") Centrer
             ul#results
             span#msg
         ul.caption
             li.first Live coverage
             li.second Country under roll-out
-        block content
 
         script.
             const sigfoxMapUrl = "#{sigfoxMapUrl}";
@@ -26,6 +29,10 @@ html
                 minZoom: 4,
                 worldCopyJump: true
             }).setView([46.6, 2.5], 6);
+
+            L.DomEvent.disableClickPropagation(document.getElementById('search'));
+            L.DomEvent.disableScrollPropagation(document.getElementById('search'));
+            L.DomEvent.disableClickPropagation(document.querySelector('ul.caption'));
 
             const style_countries = {
                 "color": "#7E0BFF",
@@ -52,7 +59,7 @@ html
             });
             osm.addTo(map);
             const countriesLayer = L.geoJSON(null, style_countries).addTo(map);
-            fetch('/publicmap/countries').then(r => r.json()).then(c => countriesLayer.addData(c)).catch(() => {});
+            fetch('/countries').then(r => r.json()).then(c => countriesLayer.addData(c)).catch(() => {});
             L.control.layers({ 'OpenStreetMap (clair)': osm, 'OpenStreetMap': osmStd, 'OpenTopoMap': topo }, { 'Country under roll-out': countriesLayer }, { position: 'topright' }).addTo(map);
             L.tileLayer(sigfoxMapUrl,{
                 zoomOffset: 0,
